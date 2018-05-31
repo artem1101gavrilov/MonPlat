@@ -1,0 +1,316 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>hello phaser!</title>
+        <script src="phaser.min.js"></script>
+    </head>
+    <body>
+
+		<script type="text/javascript">
+
+		var game = new Phaser.Game(800, 600, Phaser.AUTO, '', { preload: preload, create: create, update: update });
+
+		function preload() {
+			game.load.image('sky', 'assets/sky.png');
+			game.load.image('ground', 'assets/platform.png');
+			game.load.image('star', 'assets/star.png');
+			game.load.image('finishlevel', 'assets/finishlevel.png');
+			game.load.image('button', 'assets/button.png');
+			game.load.spritesheet('dude', 'assets/dude.png', 32, 48);
+			game.load.spritesheet('baddie', 'assets/baddie.png', 32, 32);
+		}
+		var level;
+		
+		var player;
+		var platforms;
+		var cursors;
+		var finishlevels;
+		
+		var stars;
+		var score = 0;
+		var scoreText;
+		
+		var LevelText;
+		
+		var ButtonLeft;
+		var ButtonUp;
+		var ButtonRight;
+		
+		var boolLeft;
+		var boolRight;
+		
+		var Vragi;
+		var Vrag1speed;
+		
+		function create() {
+			level = 1;
+		
+		
+			//  We're going to be using physics, so enable the Arcade Physics system
+			game.physics.startSystem(Phaser.Physics.ARCADE);
+
+			//  A simple background for our game
+			game.add.sprite(0, 0, 'sky');
+
+			//  The platforms group contains the ground and the 2 ledges we can jump on
+			platforms = game.add.group();
+			//  We will enable physics for any object that is created in this group
+			platforms.enableBody = true;
+			// Here we create the ground.
+			var ground = platforms.create(0, game.world.height - 64, 'ground');
+			//  Scale it to fit the width of the game (the original sprite is 400x32 in size)
+			ground.scale.setTo(2, 2);
+			//  This stops it from falling away when you jump on it
+			ground.body.immovable = true;
+			//  Now let's create two ledges
+			var ledge = platforms.create(400, 400, 'ground');
+			ledge.body.immovable = true;
+			ledge = platforms.create(-150, 250, 'ground');
+			ledge.body.immovable = true;
+			ledge.visible = false;
+			
+			ledge = platforms.create(400, 100, 'ground');
+			ledge.body.immovable = true;
+			ledge.visible = false;
+			
+			 // The player and its settings
+			player = game.add.sprite(32, game.world.height - 150, 'dude');
+
+			//  We need to enable physics on the player
+			game.physics.arcade.enable(player);
+
+			//  Player physics properties. Give the little guy a slight bounce.
+			player.body.bounce.y = 0.2;
+			player.body.gravity.y = 300;
+			player.body.collideWorldBounds = true;
+
+			//  Our two animations, walking left and right.
+			player.animations.add('left', [0, 1, 2, 3], 10, true);
+			player.animations.add('right', [5, 6, 7, 8], 10, true);
+			
+			cursors = game.input.keyboard.createCursorKeys();
+			
+			//  Finally some stars to collect
+			stars = game.add.group();
+
+			//  We will enable physics for any star that is created in this group
+			stars.enableBody = true;
+
+			//  Here we'll create 13 of them evenly spaced apart
+			for (var i = 0; i < 13; i++)
+			{
+				//  Create a star inside of the 'stars' group
+				var star = stars.create(i * 60, 0, 'star');
+
+				//  Let gravity do its thing
+				star.body.gravity.y = 300;
+
+				//  This just gives each star a slightly random bounce value
+				star.body.bounce.y = 0.7 + Math.random() * 0.2;
+			}
+			
+			Vragi = game.add.group();
+			Vragi.enableBody = true;
+			var Vrag = Vragi.create(400, 450, 'baddie');
+			Vrag.body.gravity.y = 300;
+			Vrag.body.collideWorldBounds = true;
+			
+			Vrag.animations.add('left', [0, 1], 10, true);
+			Vrag.animations.add('right', [2, 3], 10, true);
+			Vrag.animations.play('left');
+			Vrag1speed = -1;
+			
+			scoreText = game.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
+			
+			LevelText = game.add.text(566, 16, 'Level: 1', { fontSize: '32px', fill: '#000' });
+			
+			finishlevels = game.add.group();
+			finishlevels.enableBody = true;
+			
+			var finishlevel = finishlevels.create(730, 99.5, 'finishlevel');
+			finishlevel.body.immovable = true;
+			finishlevel.visible = false;
+			finishlevel = finishlevels.create(730, 399.5, 'finishlevel');
+			finishlevel.body.immovable = true;
+			finishlevel.visible = false;
+			
+			ButtonLeft = game.add.sprite(295, 570, 'button');
+			ButtonLeft.inputEnabled = true;
+			ButtonLeft.input.start(0, true);
+			ButtonLeft.angle = -90;
+			ButtonLeft.anchor.setTo(0.5, 0.5);
+			ButtonLeft.events.onInputDown.add(selectButtonLeft);
+			 ButtonLeft.events.onInputUp.add(releaseButtonLeft);
+			
+			ButtonUp = game.add.sprite(370, 545, 'button');
+			ButtonUp.inputEnabled = true;
+			ButtonUp.input.start(0, true);
+			ButtonUp.events.onInputDown.add(selectButtonUp);
+			
+			ButtonRight = game.add.sprite(495, 570, 'button');
+			ButtonRight.inputEnabled = true;
+			ButtonRight.input.start(0, true);
+			ButtonRight.angle = 90;
+			ButtonRight.anchor.setTo(0.5, 0.5);
+			ButtonRight.events.onInputDown.add(selectButtonRight);
+			 ButtonRight.events.onInputUp.add(releaseButtonRight);
+			
+			boolLeft = false;
+			boolRight = false;
+		}
+
+		function update() {
+			if( level < 3) {
+				//  Collide the player and the stars with the platforms
+				//var hitPlatform = game.physics.arcade.collide(player, platforms);
+				//Проверка на коллизию персонажа и звезд с платформами
+				for(var i = 0; i < 4; i++){
+					if(platforms.children[i].visible == true ){
+						game.physics.arcade.collide(player, platforms.children[i]);
+						game.physics.arcade.collide(stars, platforms.children[i]);
+						game.physics.arcade.collide(Vragi, platforms.children[i]);
+					}
+				}
+				
+				//сбор звездочек
+				game.physics.arcade.overlap(player, stars, collectStar, null, this);
+				//Монстры убивают
+				game.physics.arcade.overlap(player, Vragi, killPlayer, null, this);
+				//Касания финиша уровня
+				if(finishlevels.children[level-1].visible == true ) game.physics.arcade.overlap(player, finishlevels.children[level-1], nextlevel, null, this);
+				
+				Vragi.children[0].body.x += Vrag1speed; 
+				if (Vragi.children[0].body.x > 700){
+					Vrag1speed = -1*Vrag1speed;
+					Vragi.children[0].animations.play('left');
+				}
+				if (Vragi.children[0].body.x < 100){
+					Vrag1speed = -1*Vrag1speed;
+					Vragi.children[0].animations.play('right');
+				}
+				
+				//движение персонажа
+				if((boolLeft == false) && (boolRight == false)){
+					//  Reset the players velocity (movement)
+					player.body.velocity.x = 0;
+
+					if (cursors.left.isDown)
+					{
+						//  Move to the left
+						player.body.velocity.x = -150;
+
+						player.animations.play('left');
+					}
+					else if (cursors.right.isDown)
+					{
+						//  Move to the right
+						player.body.velocity.x = 150;
+
+						player.animations.play('right');
+					}
+					else
+					{
+						//  Stand still
+						player.animations.stop();
+
+						player.frame = 4;
+					}
+					
+					//  Allow the player to jump if they are touching the ground.
+					if (cursors.up.isDown && player.body.touching.down)
+					{
+						player.body.velocity.y = -350;
+					}
+				}
+			}
+		}
+		
+		function collectStar (player, star) {
+			
+			// Removes the star from the screen
+			star.kill();
+			
+			//  Add and update the score
+			score += 1;
+			scoreText.text = 'Score: ' + score;
+			
+			if (score == 13) {
+				if( level > 0){
+					for(var i = 0; i < 4; i++){
+						platforms.children[i].visible = true;
+					}
+				}
+				finishlevels.children[level-1].visible = true;
+			}
+		}
+		
+		function killPlayer (player, Vrag) {
+			player.kill();
+		}
+		
+		function nextlevel(player, finishlevel){
+			finishlevel.kill();
+			level += 1;
+			if (level < 3){
+				Vrag1speed = Vrag1speed * level;
+				LevelText.text = 'Level: ' + level;
+				score = 0;
+				if(level == 2){
+					player.x = 10;
+					player.y = 99;
+					for (var i = 0; i < 13; i++)
+					{
+						var star = stars.create(i * 60, 0, 'star');
+						star.body.gravity.y = 300;
+						star.body.bounce.y = 0.7 + Math.random() * 0.2;
+					}
+					platforms.children[1].visible = false;
+				}
+			}
+			else{ 
+				//Конец игры
+				LevelText.text = '';
+				scoreText.text = '';
+				for(var i = 0; i < 4; i++){
+					platforms.children[i].kill();
+				}
+				player.kill();
+				Vragi.kill();
+			}
+		}
+		
+		function selectButtonLeft(item, pointer) {
+			player.body.velocity.x = -150;
+
+			player.animations.play('left');
+			
+			boolLeft = true;
+		}
+		
+		function releaseButtonLeft(item, pointer) {
+			boolLeft = false;
+		}
+		
+		function selectButtonUp(item, pointer) {
+			if (player.body.touching.down)
+			{
+				player.body.velocity.y = -350;
+			}
+		}
+		
+		function selectButtonRight(item, pointer) {
+			player.body.velocity.x = 150;
+
+			player.animations.play('right');
+			
+			boolRight = true;
+		}
+		
+		function releaseButtonRight(item, pointer) {
+			boolRight = false;
+		}
+		</script>
+
+    </body>
+</html>
